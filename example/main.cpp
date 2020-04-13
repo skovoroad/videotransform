@@ -2,6 +2,7 @@
 #include <memory>
 #include "videotransform.h"
 #include "bmp.h"
+#include "config.h"
 
 class ExampleVideoTransformHandler : public vt::VideoHandler{
     std::string dir_;
@@ -40,39 +41,38 @@ class ExampleVideoTransformHandler : public vt::VideoHandler{
 
 int main(int argc, char** argv)
 {
-  if(argc < 3){
-    std::cerr << "Usage: <input file> <output dir>" << std::endl;
+  Config cfg;
+  vt::VideoTransformConfig vCfg;
+  std::string fileIn;
+  std::string dirOut;
+  if (! parseConfig( argc, argv, cfg, vCfg) ) {
+    std::cerr << "configuration error, exit" << std::endl;
     return -1;
   }
 
-  std::string filename = argv[1];
-  auto handler = std::make_unique<ExampleVideoTransformHandler>(argv[2]);
-  vt::VideoTransformConfig cfg;
-  cfg.widthOut=320;
-  cfg.heightOut=240;
-  auto service = createVideoTransformService(cfg, handler.get());
+  auto handler = std::make_unique<ExampleVideoTransformHandler>(cfg.dirOut.c_str());
+  auto service = createVideoTransformService(vCfg, handler.get());
   if(! service) {
     std::cerr << "Cannot create videotransform service" << std::endl;
     return -1;
   }
 
-  std::ifstream istr (filename, std::ios::in | std::ios::binary);
+  std::ifstream istr (cfg.fileIn, std::ios::in | std::ios::binary);
   
-  while(true) {  
-   
-    if(!istr)
-      break;
-    constexpr auto bufsize = 4096;
-    char buff[bufsize];
-    while(istr) {
-      istr.read(buff, bufsize);
-      auto res = service->doTransform(reinterpret_cast<const void *>(buff), istr.gcount());
-      if(res != vt::VT_OK) {
-        std::cerr << "Error received: " << int(res) << std::endl;
-        return -2;
-      }
+  if(!istr) {
+    std::cerr << "cannot open file " << cfg.fileIn << std::endl;
+    return -2;
+  }
+  constexpr auto bufsize = 4096;
+  char buff[bufsize];
+  while(istr) {
+    istr.read(buff, bufsize);
+    auto res = service->doTransform(reinterpret_cast<const void *>(buff), istr.gcount());
+    if(res != vt::VT_OK) {
+      std::cerr << "Error received: " << int(res) << std::endl;
+      return -2;
     }
   }
-  
+
   return 0; 
 }
