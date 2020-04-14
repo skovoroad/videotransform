@@ -113,38 +113,7 @@ namespace vt {
 	if (!encodeCodec_)
 	  return false;
 
-	encodeContext_ = avcodec_alloc_context3(encodeCodec_);
-	if (!encodeContext_)
-	  return false;
-
-	encodeContext_->width = cfg.widthOut;
-	encodeContext_->height = cfg.heightOut;
-	encodeContext_->time_base = AVRational { 1, 25 };
-	encodeContext_->framerate = AVRational { static_cast<int>(cfg.frameRateOut), 1 };
-	encodeContext_->gop_size = cfg.gopSize;
-	encodeContext_->pix_fmt = outFormat_;
-	encodeContext_->bit_rate = cfg.bitRateOut; // +
-	encodeContext_->profile = FF_PROFILE_H264_MAIN;
-
-	if (encodeCodec_->id == AV_CODEC_ID_H264) {
-	  av_opt_set(encodeContext_->priv_data, "preset", cfg.preset.c_str(), 0);
-	  av_opt_set(encodeContext_->priv_data, "tune", cfg.tune.c_str(), 0);
-	}
-
-	if( avcodec_open2(encodeContext_, encodeCodec_, nullptr) < 0)
-	  return false;
-
-	scaledFrame_ = av_frame_alloc();
-	if (!scaledFrame_)
-	  return false;
-
-	scaledFrame_->format = outFormat_;
-	scaledFrame_->width = cfg_.widthOut;
-	scaledFrame_->height = cfg_.heightOut;
-
-	if (av_frame_get_buffer(scaledFrame_, 1) < 0)
-	  return false;
-      }
+     }
 
       guard.disable_ = true;
       return  true;
@@ -197,6 +166,12 @@ namespace vt {
 
     VtErrorCode initScaleCtx(size_t w, size_t h) {
       if(cfg_.actions_.transformVideo_){ 
+        float wScaleFactor = static_cast<float>(cfg_.widthOut) / w;
+        float hScaleFactor = static_cast<float>(cfg_.heightOut) / h;	
+	float scaleFactor = w * hScaleFactor <= cfg_.widthOut ? hScaleFactor: wScaleFactor;
+        cfg_.widthOut = w * scaleFactor;
+        cfg_.heightOut = h * scaleFactor;
+	
 	scale_ctx = sws_getContext(
 	  w,
 	  h,
@@ -210,7 +185,38 @@ namespace vt {
 
 	if (!scale_ctx)
 	  return VT_CANNOT_CREATE_SCALE_CTX;
+	
+	encodeContext_ = avcodec_alloc_context3(encodeCodec_);
+	if (!encodeContext_)
+	  return VT_CANNOT_OPEN_ENCODER;
 
+	encodeContext_->width = cfg_.widthOut;
+	encodeContext_->height = cfg_.heightOut;
+	encodeContext_->time_base = AVRational { 1, 25 };
+	encodeContext_->framerate = AVRational { static_cast<int>(cfg_.frameRateOut), 1 };
+	encodeContext_->gop_size = cfg_.gopSize;
+	encodeContext_->pix_fmt = outFormat_;
+	encodeContext_->bit_rate = cfg_.bitRateOut; // +
+	encodeContext_->profile = FF_PROFILE_H264_MAIN;
+
+	if (encodeCodec_->id == AV_CODEC_ID_H264) {
+	  av_opt_set(encodeContext_->priv_data, "preset", cfg_.preset.c_str(), 0);
+	  av_opt_set(encodeContext_->priv_data, "tune", cfg_.tune.c_str(), 0);
+	}
+	if( avcodec_open2(encodeContext_, encodeCodec_, nullptr) < 0)
+	  return VT_CANNOT_OPEN_ENCODER;
+
+	scaledFrame_ = av_frame_alloc();
+	if (!scaledFrame_)
+	  return VT_CANNOT_ALLOC_IMAGE;
+
+	scaledFrame_->format = outFormat_;
+	scaledFrame_->width = cfg_.widthOut;
+	scaledFrame_->height = cfg_.heightOut;
+
+	if (av_frame_get_buffer(scaledFrame_, 1) < 0)
+	  return VT_CANNOT_ALLOC_IMAGE;
+ 
 	if (av_image_alloc(
 	      scaledFrame_->data, 
 	      scaledFrame_->linesize, 
