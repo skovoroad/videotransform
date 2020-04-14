@@ -123,8 +123,8 @@ namespace vt {
 	encodeContext_->framerate = AVRational { static_cast<int>(cfg.frameRateOut), 1 };
 	encodeContext_->gop_size = cfg.gopSize;
 	encodeContext_->pix_fmt = outFormat_;
-	encodeContext_->profile = FF_PROFILE_H264_MAIN;
 	encodeContext_->bit_rate = cfg.bitRateOut; // +
+	encodeContext_->profile = FF_PROFILE_H264_MAIN;
 
 	if (encodeCodec_->id == AV_CODEC_ID_H264) {
 	  av_opt_set(encodeContext_->priv_data, "preset", cfg.preset.c_str(), 0);
@@ -298,6 +298,7 @@ namespace vt {
       ctx_->scaledFrame_->linesize
     );
 
+    ctx_->scaledFrame_->pts += 1;
     auto ret = avcodec_send_frame(ctx_->encodeContext_, ctx_->scaledFrame_);
     if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
       return VT_OK;
@@ -419,8 +420,10 @@ namespace vt {
 
         if( ret < 0 )
           return VT_CANNOT_DECODE_FRAME;
-
-        if(cfg_.actions_.extractPicture_) {
+	
+	ctx_->receivedFrame_->pts += 1;
+        
+	if(cfg_.actions_.extractPicture_) {
           auto extractRes = extractPicture();
 	  if(extractRes != VT_OK)
 	    return extractRes;
@@ -433,6 +436,7 @@ namespace vt {
 	}
 
       } // while decode
+    
     } // while not empty buffer
     return VT_OK;
   }
