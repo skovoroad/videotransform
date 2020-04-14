@@ -1,15 +1,16 @@
 #pragma once
-
-namespace vt {
+#include <string>
+znamespace vt {
 
   enum VtCodec {
+    VT_CODEC_UNKNOWN,
     VT_H264,
     VT_H263,
   };
 
   enum VtPixFormat {
-   VT_YUV420P,
-   VT_BGR24
+    VT_YUV420P,
+    VT_BGR24
   };
 
   enum VtErrorCode {
