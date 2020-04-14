@@ -104,46 +104,48 @@ namespace vt {
       if( avcodec_open2(decodeContext_, decodeCodec_, nullptr) < 0)
         return false;
 
-      encodeCodec_ = avcodec_find_encoder(codecIdOut_);
-      if (!encodeCodec_)
-        return false;
-
-      encodeContext_ = avcodec_alloc_context3(encodeCodec_);
-      if (!encodeContext_)
-        return false;
-
-      encodeContext_->width = cfg.widthOut;
-      encodeContext_->height = cfg.heightOut;
-      encodeContext_->time_base = AVRational { 1, 25 };
-      encodeContext_->framerate = AVRational { static_cast<int>(cfg.frameRateOut), 1 };
-      encodeContext_->gop_size = cfg.gopSize;
-      encodeContext_->pix_fmt = outFormat_;
-      encodeContext_->profile = FF_PROFILE_H264_MAIN;
-      encodeContext_->bit_rate = cfg.bitRateOut; // +
-
-      if (encodeCodec_->id == AV_CODEC_ID_H264) {
-        av_opt_set(encodeContext_->priv_data, "preset", cfg.preset.c_str(), 0);
-        av_opt_set(encodeContext_->priv_data, "tune", cfg.tune.c_str(), 0);
-      }
-
-      if( avcodec_open2(encodeContext_, encodeCodec_, nullptr) < 0)
-        return false;
-
       receivedFrame_ = av_frame_alloc();
       if (!receivedFrame_)
         return false;
 
-      scaledFrame_ = av_frame_alloc();
-      if (!scaledFrame_)
-        return false;
+      if(cfg_.actions_.transformVideo_) {
+	encodeCodec_ = avcodec_find_encoder(codecIdOut_);
+	if (!encodeCodec_)
+	  return false;
 
-      scaledFrame_->format = outFormat_;
-      scaledFrame_->width = cfg_.widthOut;
-      scaledFrame_->height = cfg_.heightOut;
+	encodeContext_ = avcodec_alloc_context3(encodeCodec_);
+	if (!encodeContext_)
+	  return false;
 
-      if (av_frame_get_buffer(scaledFrame_, 1) < 0)
-        return false;
-  
+	encodeContext_->width = cfg.widthOut;
+	encodeContext_->height = cfg.heightOut;
+	encodeContext_->time_base = AVRational { 1, 25 };
+	encodeContext_->framerate = AVRational { static_cast<int>(cfg.frameRateOut), 1 };
+	encodeContext_->gop_size = cfg.gopSize;
+	encodeContext_->pix_fmt = outFormat_;
+	encodeContext_->profile = FF_PROFILE_H264_MAIN;
+	encodeContext_->bit_rate = cfg.bitRateOut; // +
+
+	if (encodeCodec_->id == AV_CODEC_ID_H264) {
+	  av_opt_set(encodeContext_->priv_data, "preset", cfg.preset.c_str(), 0);
+	  av_opt_set(encodeContext_->priv_data, "tune", cfg.tune.c_str(), 0);
+	}
+
+	if( avcodec_open2(encodeContext_, encodeCodec_, nullptr) < 0)
+	  return false;
+
+	scaledFrame_ = av_frame_alloc();
+	if (!scaledFrame_)
+	  return false;
+
+	scaledFrame_->format = outFormat_;
+	scaledFrame_->width = cfg_.widthOut;
+	scaledFrame_->height = cfg_.heightOut;
+
+	if (av_frame_get_buffer(scaledFrame_, 1) < 0)
+	  return false;
+      }
+
       guard.disable_ = true;
       return  true;
     }
@@ -193,30 +195,34 @@ namespace vt {
 
     }
 
-    VtErrorCode initScale(size_t w, size_t h) {
-       scale_ctx = sws_getContext(
-        w,
-        h,
-        inFormat_,
-        cfg_.widthOut,
-        cfg_.heightOut,
-        outFormat_,
-        SWS_BILINEAR,
-        NULL, NULL, NULL
-      );
+    VtErrorCode initScaleCtx(size_t w, size_t h) {
+      if(cfg_.actions_.transformVideo_){ 
+	scale_ctx = sws_getContext(
+	  w,
+	  h,
+	  inFormat_,
+	  cfg_.widthOut,
+	  cfg_.heightOut,
+	  outFormat_,
+	  SWS_BILINEAR,
+	  NULL, NULL, NULL
+	);
 
-      if (!scale_ctx)
-        return VT_CANNOT_CREATE_SCALE_CTX;
+	if (!scale_ctx)
+	  return VT_CANNOT_CREATE_SCALE_CTX;
 
-      if (av_image_alloc(
-            scaledFrame_->data, 
-            scaledFrame_->linesize, 
-            cfg_.widthOut, 
-            cfg_.heightOut, 
-            outFormat_, 
-            1) < 0)
-        return VT_CANNOT_ALLOC_IMAGE;
-   
+	if (av_image_alloc(
+	      scaledFrame_->data, 
+	      scaledFrame_->linesize, 
+	      cfg_.widthOut, 
+	      cfg_.heightOut, 
+	      outFormat_, 
+	      1) < 0)
+	  return VT_CANNOT_ALLOC_IMAGE;
+       }
+    }
+
+    VtErrorCode initNoScaleCtx(size_t w, size_t h) {
       no_scale_ctx = sws_getContext(
         w,
         h,
@@ -270,6 +276,93 @@ namespace vt {
     guard.disable_ = true;
     return VT_OK;
   }
+
+  VtErrorCode VideoTransformServiceImpl::transformVideo() {
+    if (!ctx_->scale_ctx) {
+      auto isRes = ctx_->initScaleCtx(ctx_->receivedFrame_->width, ctx_->receivedFrame_->height);
+      if(isRes != VT_OK)
+	return isRes;
+    }
+
+    if(av_frame_make_writable(ctx_->scaledFrame_)< 0) 
+      return VT_CANNOT_WRITE_FRAME;
+
+    sws_scale(
+      ctx_->scale_ctx, 
+      ctx_->receivedFrame_->data, 
+      ctx_->receivedFrame_->linesize, 
+      0, 
+      ctx_->receivedFrame_->height, 
+      ctx_->scaledFrame_->data, 
+      ctx_->scaledFrame_->linesize
+    );
+
+    auto ret = avcodec_send_frame(ctx_->encodeContext_, ctx_->scaledFrame_);
+    if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+      return VT_OK;
+    if(ret < 0)
+      return VT_CANNOT_ENCODE_FRAME;
+
+    while (ret >= 0) {
+      AVPacket avpktOut;
+      av_init_packet(&avpktOut);
+      avpktOut.data = nullptr;
+      avpktOut.size = 0;
+      ScopeGuard guardPkt([&]() {     av_packet_unref(&avpktOut) ;});
+
+      ret = avcodec_receive_packet(ctx_->encodeContext_, &avpktOut);
+      if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+	break;
+      if( ret < 0)
+	return VT_CANNOT_ENCODE_FRAME;
+
+      if(!handler_->handleTransformedVideo(avpktOut.data, avpktOut.size))
+	return VT_CANCELED_BY_USER;
+    }
+    return VT_OK;
+  }
+
+  VtErrorCode VideoTransformServiceImpl::extractPicture() {
+    if (!ctx_->no_scale_ctx) {
+      auto isRes = ctx_->initNoScaleCtx(ctx_->receivedFrame_->width, ctx_->receivedFrame_->height);
+
+      if(isRes != VT_OK)
+	return isRes;
+    }
+
+    uint8_t *dst_data[4];
+    int dst_linesize[4];
+    int dst_bufsize = av_image_alloc(
+      dst_data, 
+      dst_linesize, 
+      ctx_->receivedFrame_->width, 
+      ctx_->receivedFrame_->height, 
+      ctx_->outPicFormat_, 
+      1);
+    
+    if (dst_bufsize < 0)
+      return VT_CANNOT_DECODE_FRAME;
+    
+    sws_scale(
+      ctx_->no_scale_ctx, 
+      ctx_->receivedFrame_->data, 
+      ctx_->receivedFrame_->linesize, 
+      0, 
+      ctx_->receivedFrame_->height,
+      dst_data, 
+      dst_linesize 
+     );
+
+     if(! handler_->handleExtractedPicture(
+	dst_data[0],  
+	dst_bufsize ,
+	ctx_->receivedFrame_->width, 
+	ctx_->receivedFrame_->height
+	))
+       return VT_CANCELED_BY_USER;
+     
+     return VT_OK; 
+   }
 
   VtErrorCode VideoTransformServiceImpl::doTransform(
       const void * buff,
@@ -327,87 +420,17 @@ namespace vt {
           return VT_CANNOT_DECODE_FRAME;
 
         if(cfg_.actions_.extractPicture_) {
-          if (!ctx_->no_scale_ctx) {
-            auto isRes = ctx_->initScale(ctx_->receivedFrame_->width, ctx_->receivedFrame_->height);
-
-            if(isRes != VT_OK)
-              return isRes;
-          }
-
-          uint8_t *dst_data[4];
-	  int dst_linesize[4];
-          int dst_bufsize = av_image_alloc(
-            dst_data, 
-	    dst_linesize, 
-	    ctx_->receivedFrame_->width, 
-	    ctx_->receivedFrame_->height, 
-	    ctx_->outPicFormat_, 
-	    1);
-          if (dst_bufsize < 0)
-              return VT_CANNOT_DECODE_FRAME;
-          sws_scale(
-            ctx_->no_scale_ctx, 
-            ctx_->receivedFrame_->data, 
-            ctx_->receivedFrame_->linesize, 
-            0, 
-            ctx_->receivedFrame_->height,
-	    dst_data, 
-	    dst_linesize 
-           );
-
-           if(! handler_->handleExtractedPicture(
-              dst_data[0],  
-              dst_bufsize ,
-	      ctx_->receivedFrame_->width, 
-	      ctx_->receivedFrame_->height
-	      ))
-            return VT_CANCELED_BY_USER;
-	}
-
-        if(!cfg_.actions_.transformVideo_)
-          continue;
-
-        if (!ctx_->scale_ctx) {
-          auto isRes = ctx_->initScale(ctx_->receivedFrame_->width, ctx_->receivedFrame_->height);
-          if(isRes != VT_OK)
-            return isRes;
+          auto extractRes = extractPicture();
+	  if(extractRes != VT_OK)
+	    return extractRes;
         }
 
-        if(av_frame_make_writable(ctx_->scaledFrame_)< 0) 
-          return VT_CANNOT_WRITE_FRAME;
+        if(cfg_.actions_.transformVideo_) {
+          auto transformRes = transformVideo();
+	  if(transformRes != VT_OK)
+	    return transformRes;
+	}
 
-        sws_scale(
-          ctx_->scale_ctx, 
-          ctx_->receivedFrame_->data, 
-          ctx_->receivedFrame_->linesize, 
-          0, 
-          ctx_->receivedFrame_->height, 
-          ctx_->scaledFrame_->data, 
-          ctx_->scaledFrame_->linesize
-        );
-
-        ret = avcodec_send_frame(ctx_->encodeContext_, ctx_->scaledFrame_);
-        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-          break;
-        if(ret < 0)
-          return VT_CANNOT_ENCODE_FRAME;
-
-        while (ret >= 0) {
-          AVPacket avpktOut;
-          av_init_packet(&avpktOut);
-          avpktOut.data = nullptr;
-          avpktOut.size = 0;
-          ScopeGuard guardPkt([&]() {     av_packet_unref(&avpktOut) ;});
- 
-          ret = avcodec_receive_packet(ctx_->encodeContext_, &avpktOut);
-          if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-            break;
-          if( ret < 0)
-            return VT_CANNOT_ENCODE_FRAME;
-  
-          if(!handler_->handleTransformedVideo(avpktOut.data, avpktOut.size))
-            return VT_CANCELED_BY_USER;
-        } // while encode
       } // while decode
     } // while not empty buffer
     return VT_OK;

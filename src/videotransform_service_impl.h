@@ -10,6 +10,8 @@ namespace vt {
       VtErrorCode init(const VideoTransformConfig&, VideoHandler*);
       VtErrorCode doTransform(const void*, size_t) override;
     private:
+      VtErrorCode extractPicture();
+      VtErrorCode transformVideo();
       RingBuffer<char, 4*1024> buffer_;
       struct TransformCtx;
       std::unique_ptr<TransformCtx> ctx_;
