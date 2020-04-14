@@ -220,6 +220,7 @@ namespace vt {
 	      1) < 0)
 	  return VT_CANNOT_ALLOC_IMAGE;
        }
+      return VT_OK;
     }
 
     VtErrorCode initNoScaleCtx(size_t w, size_t h) {
