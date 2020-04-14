@@ -1,6 +1,6 @@
 #pragma once
 #include <string>
-znamespace vt {
+namespace vt {
 
   enum VtCodec {
     VT_CODEC_UNKNOWN,
