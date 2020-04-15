@@ -65,6 +65,8 @@ namespace vt {
       const VideoTransformConfig& vcfg,
       VideoHandler* vh)
   {
+    av_log_set_level(AV_LOG_QUIET);
+
     auto retval = std::make_unique<VideoTransformServiceImpl>();
     if(retval->init(vcfg, vh) != VT_OK){
       retval.reset();
@@ -100,6 +102,8 @@ namespace vt {
       decodeContext_ = avcodec_alloc_context3(decodeCodec_);
       if (!decodeContext_)
         return false;
+
+      decodeContext_->thread_count = 1;
 
       if( avcodec_open2(decodeContext_, decodeCodec_, nullptr) < 0)
         return false;
@@ -190,6 +194,7 @@ namespace vt {
 	if (!encodeContext_)
 	  return VT_CANNOT_OPEN_ENCODER;
 
+	encodeContext_->thread_count=1;
 	encodeContext_->width = cfg_.widthOut;
 	encodeContext_->height = cfg_.heightOut;
 	encodeContext_->time_base = AVRational { 1, 25 };
