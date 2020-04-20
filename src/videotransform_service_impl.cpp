@@ -9,9 +9,25 @@ extern "C" {
   #include <libavutil/parseutils.h>
   #include <libswscale/swscale.h>
 }
-
+#include <iostream>
 #include <memory>
 #include "videotransform_service_impl.h"
+
+#define DEBUG_CERR
+#ifdef DEBUG_CERR
+#define stdcerr std::cerr
+#else
+class NullStream : public std::ostream {
+    class NullBuffer : public std::streambuf {
+    public:
+        int overflow( int c ) { return c; }
+    } m_nb;
+public:
+    NullStream() : std::ostream( &m_nb ) {}
+};
+static NullStream nullstream;
+#define stdcerr nullstream
+#endif
 
 namespace vt {
 
@@ -128,6 +144,7 @@ namespace vt {
     }
 
     void free() {
+      stdcerr << "free()" << std::endl;
       if (decodeContext_) {
         avcodec_close(decodeContext_);
         av_free(decodeContext_);
@@ -169,13 +186,24 @@ namespace vt {
     }
 
     VtErrorCode initScaleCtx(size_t w, size_t h) {
+      stdcerr << "initScaleCtx" << std::endl;
       if(cfg_.actions_.transformVideo_){ 
+        ScopeGuard guard( [&](){ free(); } );
         float wScaleFactor = static_cast<float>(cfg_.widthOut) / w;
         float hScaleFactor = static_cast<float>(cfg_.heightOut) / h;	
 	float scaleFactor = w * hScaleFactor <= cfg_.widthOut ? hScaleFactor: wScaleFactor;
+//        scaleFactor = 1.0;
         cfg_.widthOut = w * scaleFactor;
         cfg_.heightOut = h * scaleFactor;
-	
+        if(cfg_.widthOut % 2 == 1)
+          cfg_.widthOut--; // ensure width is evem, this is important for h264	
+        stdcerr << "initScaleCtx scale factor" <<  scaleFactor << std::endl <<
+          w << std::endl <<
+          h  << std::endl <<
+          cfg_.widthOut << std::endl <<
+          cfg_.heightOut << std::endl
+        ; 
+ 
 	scale_ctx = sws_getContext(
 	  w,
 	  h,
@@ -186,14 +214,22 @@ namespace vt {
 	  SWS_BILINEAR,
 	  NULL, NULL, NULL
 	);
+      
 
-	if (!scale_ctx)
+	if (!scale_ctx) {
+          stdcerr << "initScaleCtx scale_ctx init fault" << std::endl;
+ 
 	  return VT_CANNOT_CREATE_SCALE_CTX;
-	
+        }
+        stdcerr << "initScaleCtx scale_ctx inited" << std::endl;
+ 
 	encodeContext_ = avcodec_alloc_context3(encodeCodec_);
-	if (!encodeContext_)
-	  return VT_CANNOT_OPEN_ENCODER;
-
+	if (!encodeContext_) {
+          stdcerr << "initScaleCtx encode_ctx init fault" << std::endl;
+          return VT_CANNOT_OPEN_ENCODER;
+        }
+        stdcerr << "initScaleCtx encode_ctx inited" << std::endl;
+ 
 	encodeContext_->thread_count=1;
 	encodeContext_->width = cfg_.widthOut;
 	encodeContext_->height = cfg_.heightOut;
@@ -208,19 +244,33 @@ namespace vt {
 	  av_opt_set(encodeContext_->priv_data, "preset", cfg_.preset.c_str(), 0);
 	  av_opt_set(encodeContext_->priv_data, "tune", cfg_.tune.c_str(), 0);
 	}
-	if( avcodec_open2(encodeContext_, encodeCodec_, nullptr) < 0)
-	  return VT_CANNOT_OPEN_ENCODER;
+        auto encodeRet =  avcodec_open2(encodeContext_, encodeCodec_, nullptr); 
+	if(encodeRet < 0) {
+          char buffer[1024];
+          memset(buffer, 0, 1024);
 
+          av_strerror (encodeRet, buffer, 1024);
+          stdcerr << "initScaleCtx encodeCodec init fault: " << static_cast<const char *>(buffer) <<  std::endl;
+          return VT_CANNOT_OPEN_ENCODER;
+        }
+        stdcerr << "initScaleCtx encodeCodec inited" << std::endl;
+ 
 	scaledFrame_ = av_frame_alloc();
-	if (!scaledFrame_)
+	if (!scaledFrame_) {
+          stdcerr << "initScaleCtx scaledFrame alloc fault" << std::endl;
 	  return VT_CANNOT_ALLOC_IMAGE;
-
+        }
+        stdcerr << "initScaleCtx scaledFrame allocated" << std::endl;
+ 
 	scaledFrame_->format = outFormat_;
 	scaledFrame_->width = cfg_.widthOut;
 	scaledFrame_->height = cfg_.heightOut;
 
-	if (av_frame_get_buffer(scaledFrame_, 1) < 0)
-	  return VT_CANNOT_ALLOC_IMAGE;
+	if (av_frame_get_buffer(scaledFrame_, 1) < 0) {
+          stdcerr << "initScaleCtx scaledFrame allocated" << std::endl;
+          return VT_CANNOT_ALLOC_IMAGE;
+        }
+        stdcerr << "initScaleCtx scaledFrame allocated" << std::endl;
  
 	if (av_image_alloc(
 	      scaledFrame_->data, 
@@ -228,9 +278,15 @@ namespace vt {
 	      cfg_.widthOut, 
 	      cfg_.heightOut, 
 	      outFormat_, 
-	      1) < 0)
-	  return VT_CANNOT_ALLOC_IMAGE;
-       }
+	      1) < 0) {
+	         stdcerr << "initScaleCtx allocate image fault" << std::endl;
+                 return VT_CANNOT_ALLOC_IMAGE;
+        }
+        stdcerr << "initScaleCtx image  allocated" << std::endl;
+        guard.disable_ = true;
+      }
+      stdcerr << "initScaleCtx inited" << std::endl;
+ 
       return VT_OK;
     }
 
@@ -252,6 +308,9 @@ namespace vt {
       return VT_OK;
     }
 
+    bool ready() {
+      return parser_ != nullptr;
+    }
 
     AVCodecID codecId_ = AV_CODEC_ID_H264;
     AVCodecID codecIdOut_ = AV_CODEC_ID_H264;
@@ -290,13 +349,20 @@ namespace vt {
   }
 
   VtErrorCode VideoTransformServiceImpl::transformVideo() {
-    if (!ctx_->scale_ctx) {
+//   stdcerr << "transformVideo" << std::endl;
+   if (!ctx_->scale_ctx) {
       auto isRes = ctx_->initScaleCtx(ctx_->receivedFrame_->width, ctx_->receivedFrame_->height);
-      if(isRes != VT_OK)
+      if(isRes != VT_OK) {
+        stdcerr << "initScale is not OK!!!" << std::endl;
 	return isRes;
+      }
     }
-
-    if(av_frame_make_writable(ctx_->scaledFrame_)< 0) 
+  //  stdcerr << "tranformVideo started" << std::endl;
+    if(!ctx_->scaledFrame_) {
+      stdcerr << "wtf! scaledFrame is null!" << std::endl;
+    }
+ 
+    if(av_frame_make_writable(ctx_->scaledFrame_) < 0) 
       return VT_CANNOT_WRITE_FRAME;
 
     sws_scale(
@@ -380,9 +446,9 @@ namespace vt {
   VtErrorCode VideoTransformServiceImpl::doTransform(
       const void * buff,
       size_t size){
-    
+       
     buffer_.push (reinterpret_cast<const char *>(buff), size);
-    if(!ctx_)
+    if(!ctx_ || !ctx_->ready())
       return VT_CONTEXT_NOT_INITED;
 
     while (!buffer_.empty()) {

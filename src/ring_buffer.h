@@ -1,5 +1,46 @@
 #pragma once
+#include <vector>
+template<typename TElem, size_t Size>
+class RingBuffer {
+public:
+  RingBuffer() {
+    //reset();
+    buffer_.reserve(Size);
+  }
 
+  bool push(const TElem *pbuffer, size_t nbytes) {
+    buffer_.insert(buffer_.end(), pbuffer, pbuffer + nbytes);
+    return true;
+  }
+
+  bool consume(size_t nbytes) {
+    buffer_.erase(buffer_.begin(), buffer_.begin() + nbytes);
+    return true;
+  }
+
+  TElem *data() {
+    return buffer_.data();
+  }
+
+  size_t size() {
+    return buffer_.size();
+  }
+
+  bool empty() {
+    return buffer_.empty();
+  }
+
+  void reset() {
+     buffer_.clear();
+  }
+private:
+/*  TElem buffer_[Size];
+  TElem * data_ = nullptr;
+  size_t dataSize_ = 0;*/
+  std::vector<TElem> buffer_;
+
+};
+/*
 template<typename TElem, size_t Size>
 class RingBuffer {
 public:
@@ -23,6 +64,7 @@ public:
 
     memcpy(data_ + dataSize_, pbuffer, nbytes);
     dataSize_ += nbytes;
+    return true;
   }
 
   bool consume(size_t nbytes) {
@@ -58,3 +100,4 @@ private:
   size_t dataSize_ = 0;
 
 };
+*/
