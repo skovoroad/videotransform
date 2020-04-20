@@ -26,15 +26,15 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
   FFmpeg::libpostproc
   FFmpeg::libswresample
   FFmpeg::libswscale
-  FFmpeg::libx264
-#  x265
-#  vdpau
-#  va-drm 
-#  va-x11
-#  va
-#  X11
+  x264
+  x265
+  vdpau
+  va-drm 
+  va-x11
+  va
+  X11
   pthread
   dl
-#  z
+  z
 )
 
