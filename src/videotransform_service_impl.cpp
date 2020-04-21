@@ -9,73 +9,13 @@ extern "C" {
   #include <libavutil/parseutils.h>
   #include <libswscale/swscale.h>
 }
-#include <iostream>
 #include <memory>
 #include "videotransform_service_impl.h"
-
-#define DEBUG_CERR
-#ifdef DEBUG_CERR
-#define stdcerr std::cerr
-#else
-class NullStream : public std::ostream {
-    class NullBuffer : public std::streambuf {
-    public:
-        int overflow( int c ) { return c; }
-    } m_nb;
-public:
-    NullStream() : std::ostream( &m_nb ) {}
-};
-static NullStream nullstream;
-#define stdcerr nullstream
-#endif
+#include "debuglog.hpp"
+#include "scopeguard.hpp"
+#include "consts.hpp"
 
 namespace vt {
-
-  template <typename ExitCallback>
-  struct ScopeGuard {
-    ExitCallback exit_callback_;
-    bool disable_ = false;
-
-    ScopeGuard(ExitCallback ec)
-      : exit_callback_(ec) {
-    };
-
-    ~ScopeGuard() {
-      if(!disable_)
-        exit_callback_();
-    }
-  };
-
-  namespace vt2av {
-     
-    VtErrorCode codecId(VtCodec id, AVCodecID& retval) {
-      switch (id) {
-        case VT_H264:
-          retval = AV_CODEC_ID_H264;
-          break;
-        case VT_H263:
-          retval = AV_CODEC_ID_H263;
-          break;
-        default:
-          return VT_UNKNOWN_CODEC;
-      };
-      return VT_OK;
-    }
-
-    VtErrorCode pixFormatId(VtPixFormat id, AVPixelFormat& retval) {
-      switch(id) {
-        case VT_BGR24:
-          retval = AV_PIX_FMT_BGR24;
-          break;
-        case VT_YUV420P:
-          retval = AV_PIX_FMT_YUV420P;
-          break;
-        default:
-          return VT_UNKNOWN_PIX;
-      }
-      return VT_OK;
-    }
-  } // namespace vt2av
 
   VideoTransformService* createVideoTransformService(
       const VideoTransformConfig& vcfg,
