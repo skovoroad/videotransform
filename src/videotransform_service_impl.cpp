@@ -128,7 +128,7 @@ namespace vt {
       if (!receivedFrame_)
         return false;
 
-      if(cfg_.actions_.transformVideo_) {
+      if(cfg_.actions_.scaleVideo_) {
 	encodeCodec_ = avcodec_find_encoder(codecIdOut_);
 	if (!encodeCodec_)
 	  return false;
@@ -187,7 +187,7 @@ namespace vt {
 
     VtErrorCode initScaleCtx(size_t w, size_t h) {
       stdcerr << "initScaleCtx" << std::endl;
-      if(cfg_.actions_.transformVideo_){ 
+      if(cfg_.actions_.scaleVideo_){ 
         ScopeGuard guard( [&](){ free(); } );
         float wScaleFactor = static_cast<float>(cfg_.widthOut) / w;
         float hScaleFactor = static_cast<float>(cfg_.heightOut) / h;	
@@ -348,7 +348,7 @@ namespace vt {
     return VT_OK;
   }
 
-  VtErrorCode VideoTransformServiceImpl::transformVideo() {
+  VtErrorCode VideoTransformServiceImpl::scaleVideo() {
 //   stdcerr << "transformVideo" << std::endl;
    if (!ctx_->scale_ctx) {
       auto isRes = ctx_->initScaleCtx(ctx_->receivedFrame_->width, ctx_->receivedFrame_->height);
@@ -395,7 +395,7 @@ namespace vt {
       if( ret < 0)
 	return VT_CANNOT_ENCODE_FRAME;
 
-      if(!handler_->handleTransformedVideo(avpktOut.data, avpktOut.size))
+      if(!handler_->handleScaledVideo(avpktOut.data, avpktOut.size))
 	return VT_CANCELED_BY_USER;
     }
     return VT_OK;
@@ -443,7 +443,15 @@ namespace vt {
      return VT_OK; 
    }
 
-  VtErrorCode VideoTransformServiceImpl::doTransform(
+  VtErrorCode VideoTransformServiceImpl::addAudio(
+      uint32_t ts,
+      const void * buff,
+      size_t size){
+    return VT_UNKNOWN_ERROR;
+  } 
+
+  VtErrorCode VideoTransformServiceImpl::addVideo(
+      uint32_t ts,
       const void * buff,
       size_t size){
        
@@ -506,10 +514,10 @@ namespace vt {
 	    return extractRes;
         }
 
-        if(cfg_.actions_.transformVideo_) {
-          auto transformRes = transformVideo();
-	  if(transformRes != VT_OK)
-	    return transformRes;
+        if(cfg_.actions_.scaleVideo_) {
+          auto scaleRes = scaleVideo();
+	  if(scaleRes != VT_OK)
+	    return scaleRes;
 	}
 
       } // while decode

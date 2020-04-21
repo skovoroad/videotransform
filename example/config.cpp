@@ -55,7 +55,7 @@ bool dumpConfig(const vt::VideoTransformConfig& cfg, Config& config) {
     << "file in: " << config.fileIn << std::endl
     << "dir out: " << config.dirOut << std::endl
     << "extract picture: " << cfg.actions_.extractPicture_ << std::endl
-    << "transform video: " << cfg.actions_.transformVideo_ << std::endl
+    << "scale video: " << cfg.actions_.scaleVideo_ << std::endl
     << "codec in: " << cfg.codecIn << std::endl
     << "codec out: " << cfg.codecOut << std::endl
     << "width out: " << cfg.widthOut << std::endl
@@ -101,7 +101,7 @@ bool parseConfig(
       ("file-in", po::value<std::string>(&config.fileIn), "input file")
       ("dir-out", po::value<std::string>(&config.dirOut), "output directory (must exist)")
       ("extract-picture", po::value<bool>(&vConfig.actions_.extractPicture_)->default_value(true), "extract picture, default true")
-      ("transform-video", po::value<bool>(&vConfig.actions_.transformVideo_)->default_value(true), "transform video, default true")
+      ("scale-video", po::value<bool>(&vConfig.actions_.scaleVideo_)->default_value(true), "scale video, default true")
       ("width", po::value<size_t>(&vConfig.widthOut)->default_value(320), "output video width, default 320")
       ("height", po::value<size_t>(&vConfig.heightOut)->default_value(240), "output video height, default 240")
       ("frame-rate", po::value<size_t>(&vConfig.frameRateOut)->default_value(25), "output frame rate, default 25 (more frame-rate -> more output size)")

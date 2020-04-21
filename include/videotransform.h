@@ -33,7 +33,8 @@ namespace vt {
   struct VideoTransformConfig {
     struct {
       bool extractPicture_ = true;
-      bool transformVideo_ = true;  
+      bool scaleVideo_ = true;  
+      bool makeAvi_ = true;  
     } actions_;
     VtCodec codecIn = VT_H264;
     VtCodec codecOut = VT_H264;
@@ -55,12 +56,14 @@ namespace vt {
   class VideoHandler {
     public:
       virtual  bool handleExtractedPicture(const void *, size_t nbytes, size_t w, size_t h) = 0;
-      virtual  bool handleTransformedVideo(const void *, size_t) = 0;
+      virtual  bool handleScaledVideo(const void *, size_t) = 0;
+      virtual  bool handleAvi(const void *, size_t) = 0;
   };
 
   class VideoTransformService {
     public:
-      virtual  VtErrorCode doTransform(const void *, size_t) = 0;
+      virtual  VtErrorCode addAudio(uint32_t ts, const void *, size_t) = 0;
+      virtual  VtErrorCode addVideo(uint32_t ts, const void *, size_t) = 0;
   };
 
   VideoTransformService*  createVideoTransformService(

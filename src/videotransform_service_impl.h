@@ -8,10 +8,11 @@ namespace vt {
   class VideoTransformServiceImpl: public VideoTransformService {
     public:
       VtErrorCode init(const VideoTransformConfig&, VideoHandler*);
-      VtErrorCode doTransform(const void*, size_t) override;
+      VtErrorCode addAudio(uint32_t, const void*, size_t) override;
+      VtErrorCode addVideo(uint32_t, const void*, size_t) override;
     private:
       VtErrorCode extractPicture();
-      VtErrorCode transformVideo();
+      VtErrorCode scaleVideo();
       RingBuffer<char, 4*1024> buffer_;
       struct TransformCtx;
       std::unique_ptr<TransformCtx> ctx_;

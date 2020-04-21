@@ -31,9 +31,13 @@ class ExampleVideoTransformHandler : public vt::VideoHandler{
       return true;
     }
  
-    bool handleTransformedVideo(const void *data, size_t size) override {
+    bool handleScaledVideo(const void *data, size_t size) override {
       ofstr.write(reinterpret_cast<const char *>(data), size);
 
+      return true;
+    }
+
+    bool handleAvi(const void *, size_t) override {
       return true;
     }
 };
@@ -65,9 +69,10 @@ int main(int argc, char** argv)
   }
   constexpr auto bufsize = 4096;
   char buff[bufsize];
+  uint32_t ts = 0;
   while(istr) {
     istr.read(buff, bufsize);
-    auto res = service->doTransform(reinterpret_cast<const void *>(buff), istr.gcount());
+    auto res = service->addVideo(++ts, reinterpret_cast<const void *>(buff), istr.gcount());
     if(res != vt::VT_OK) {
       std::cerr << "Error received: " << int(res) << std::endl;
       return -2;
