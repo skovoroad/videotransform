@@ -2,7 +2,7 @@
 #include <iostream>
 
 namespace vt {
-  #define DEBUG_CERR
+  //#define DEBUG_CERR
   #ifdef DEBUG_CERR
   #define stdcerr std::cerr
   #else

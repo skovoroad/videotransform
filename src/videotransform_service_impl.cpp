@@ -84,7 +84,6 @@ namespace vt {
     }
 
     void free() {
-      stdcerr << "free()" << std::endl;
       if (decodeContext_) {
         avcodec_close(decodeContext_);
         av_free(decodeContext_);
@@ -126,7 +125,6 @@ namespace vt {
     }
 
     VtErrorCode initScaleCtx(size_t w, size_t h) {
-      stdcerr << "initScaleCtx" << std::endl;
       if(cfg_.actions_.scaleVideo_){ 
         ScopeGuard guard( [&](){ free(); } );
         float wScaleFactor = static_cast<float>(cfg_.widthOut) / w;
@@ -137,13 +135,7 @@ namespace vt {
         cfg_.heightOut = h * scaleFactor;
         if(cfg_.widthOut % 2 == 1)
           cfg_.widthOut--; // ensure width is evem, this is important for h264	
-        stdcerr << "initScaleCtx scale factor" <<  scaleFactor << std::endl <<
-          w << std::endl <<
-          h  << std::endl <<
-          cfg_.widthOut << std::endl <<
-          cfg_.heightOut << std::endl
-        ; 
- 
+
 		scale_ctx = sws_getContext(
 		  w,
 		  h,
@@ -157,19 +149,18 @@ namespace vt {
       
 
 		if (!scale_ctx) {
-          stdcerr << "initScaleCtx scale_ctx init fault" << std::endl;
+          std::cerr << "initScaleCtx scale_ctx init fault" << std::endl;
 		  return VT_CANNOT_CREATE_SCALE_CTX;
         }
-        stdcerr << "initScaleCtx scale_ctx inited" << std::endl;
  
 		encodeContext_ = avcodec_alloc_context3(encodeCodec_);
 		if (!encodeContext_) {
-          stdcerr << "initScaleCtx encode_ctx init fault" << std::endl;
+          std::cerr << "initScaleCtx encode_ctx init fault" << std::endl;
           return VT_CANNOT_OPEN_ENCODER;
         }
-        stdcerr << "initScaleCtx encode_ctx inited" << std::endl;
  
 		encodeContext_->thread_count=1;
+		encodeContext_->max_b_frames=0;
 		encodeContext_->width = cfg_.widthOut;
 		encodeContext_->height = cfg_.heightOut;
 		encodeContext_->time_base = AVRational { 1, static_cast<int>(cfg_.frameRateOut) };
@@ -189,27 +180,24 @@ namespace vt {
           memset(buffer, 0, 1024);
 
           av_strerror (encodeRet, buffer, 1024);
-          stdcerr << "initScaleCtx encodeCodec init fault: " << static_cast<const char *>(buffer) <<  std::endl;
+          std::cerr << "initScaleCtx encodeCodec init fault: " << static_cast<const char *>(buffer) <<  std::endl;
           return VT_CANNOT_OPEN_ENCODER;
         }
-        stdcerr << "initScaleCtx encodeCodec inited" << std::endl;
  
 		scaledFrame_ = av_frame_alloc();
 		if (!scaledFrame_) {
-          stdcerr << "initScaleCtx scaledFrame alloc fault" << std::endl;
+          std::cerr << "initScaleCtx scaledFrame alloc fault" << std::endl;
 		  return VT_CANNOT_ALLOC_IMAGE;
         }
-        stdcerr << "initScaleCtx scaledFrame allocated" << std::endl;
  
 		scaledFrame_->format = outFormat_;
 		scaledFrame_->width = cfg_.widthOut;
 		scaledFrame_->height = cfg_.heightOut;
 
 		if (av_frame_get_buffer(scaledFrame_, 1) < 0) {
-          stdcerr << "initScaleCtx scaledFrame allocated" << std::endl;
+          std::cerr << "initScaleCtx scaledFrame allocation error" << std::endl;
           return VT_CANNOT_ALLOC_IMAGE;
         }
-        stdcerr << "initScaleCtx scaledFrame allocated" << std::endl;
  
 		if (av_image_alloc(
 	      scaledFrame_->data, 
@@ -218,13 +206,11 @@ namespace vt {
 	      cfg_.heightOut, 
 	      outFormat_, 
 	      1) < 0) {
-	         stdcerr << "initScaleCtx allocate image fault" << std::endl;
+	         std::cerr << "initScaleCtx allocate image fault" << std::endl;
                  return VT_CANNOT_ALLOC_IMAGE;
         }
-        stdcerr << "initScaleCtx image  allocated" << std::endl;
         guard.disable_ = true;
       }
-      stdcerr << "initScaleCtx inited" << std::endl;
  
       return VT_OK;
     }
@@ -288,17 +274,15 @@ namespace vt {
   }
 
   VtErrorCode VideoTransformServiceImpl::scaleVideo() {
-//   stdcerr << "transformVideo" << std::endl;
    if (!ctx_->scale_ctx) {
       auto isRes = ctx_->initScaleCtx(ctx_->receivedFrame_->width, ctx_->receivedFrame_->height);
       if(isRes != VT_OK) {
-        stdcerr << "initScale is not OK!!!" << std::endl;
-	return isRes;
+        std::cerr << "initScale is not OK!!!" << std::endl;
+		return isRes;
       }
     }
-  //  stdcerr << "tranformVideo started" << std::endl;
     if(!ctx_->scaledFrame_) {
-      stdcerr << "wtf! scaledFrame is null!" << std::endl;
+      std::cerr << "wtf! scaledFrame is null!" << std::endl;
     }
  
     if(av_frame_make_writable(ctx_->scaledFrame_) < 0) 
@@ -330,10 +314,11 @@ namespace vt {
 
       ret = avcodec_receive_packet(ctx_->encodeContext_, &avpktOut);
       if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-	break;
+       	break;
       if( ret < 0)
-	return VT_CANNOT_ENCODE_FRAME;
+	    return VT_CANNOT_ENCODE_FRAME;
 
+	  std::cout << " " << "0.0" <<  avpktOut.size << std::endl;
       if(!handler_->handleScaledVideo(avpktOut.data, avpktOut.size))
 	return VT_CANCELED_BY_USER;
     }

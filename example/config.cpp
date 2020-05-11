@@ -51,6 +51,7 @@ namespace vt {
 }
 
 bool dumpConfig(const vt::VideoTransformConfig& cfg, Config& config) {
+  return true;
   std::cout  
     << "file in: " << config.fileIn << std::endl
     << "dir out: " << config.dirOut << std::endl
