@@ -12,7 +12,7 @@ class ExampleVideoTransformHandler : public vt::VideoHandler{
     ExampleVideoTransformHandler(const char *dir) {
        dir_ = dir;
       std::stringstream fname;
-      fname << dir_ << "/out.h264"; 
+      fname << dir_ << "/scaled.h264"; 
       std::string h264fname = fname.str(); 
       ofstr.open(h264fname.c_str(), std::ios::out | std::ios::binary);
    }
@@ -32,6 +32,7 @@ class ExampleVideoTransformHandler : public vt::VideoHandler{
     }
  
     bool handleScaledVideo(const void *data, size_t size) override {
+      std::cout << "0.0 " <<  size << std::endl;
       ofstr.write(reinterpret_cast<const char *>(data), size);
 
       return true;

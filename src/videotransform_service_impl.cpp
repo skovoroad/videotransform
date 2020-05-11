@@ -318,9 +318,8 @@ namespace vt {
       if( ret < 0)
 	    return VT_CANNOT_ENCODE_FRAME;
 
-	  std::cout << " " << "0.0" <<  avpktOut.size << std::endl;
       if(!handler_->handleScaledVideo(avpktOut.data, avpktOut.size))
-	return VT_CANCELED_BY_USER;
+      	return VT_CANCELED_BY_USER;
     }
     return VT_OK;
   }
