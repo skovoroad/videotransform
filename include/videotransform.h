@@ -56,8 +56,9 @@ namespace vt {
   class VideoHandler {
     public:
       virtual  bool handleExtractedPicture(const void *, size_t nbytes, size_t w, size_t h) = 0;
+
+      virtual  bool handleScaledVideoMediatype(const char *) = 0;
       virtual  bool handleScaledVideo(const void *, size_t) = 0;
-      virtual  bool handleAvi(const void *, size_t) = 0;
   };
 
   class VideoTransformService {

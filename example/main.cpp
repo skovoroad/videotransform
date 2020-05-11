@@ -10,12 +10,12 @@ class ExampleVideoTransformHandler : public vt::VideoHandler{
     std::ofstream ofstr;
    public:
     ExampleVideoTransformHandler(const char *dir) {
-       dir_ = dir;
+      dir_ = dir;
       std::stringstream fname;
       fname << dir_ << "/scaled.h264"; 
       std::string h264fname = fname.str(); 
       ofstr.open(h264fname.c_str(), std::ios::out | std::ios::binary);
-   }
+    }
 
     bool handleExtractedPicture(
        const void *data, 
@@ -30,15 +30,17 @@ class ExampleVideoTransformHandler : public vt::VideoHandler{
         std::cerr << "cannot write file " << bmpfname << std::endl;   
       return true;
     }
+
+    bool handleScaledVideoMediatype(const char *mediatype) override {
+      std::cerr << mediatype << std::endl;
+      return true;
+    }
+
  
     bool handleScaledVideo(const void *data, size_t size) override {
       std::cout << "0.0 " <<  size << std::endl;
       ofstr.write(reinterpret_cast<const char *>(data), size);
 
-      return true;
-    }
-
-    bool handleAvi(const void *, size_t) override {
       return true;
     }
 };

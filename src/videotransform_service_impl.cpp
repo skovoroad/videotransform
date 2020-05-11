@@ -10,6 +10,7 @@ extern "C" {
   #include <libswscale/swscale.h>
 }
 #include <memory>
+#include <sstream>
 #include "videotransform_service_impl.h"
 #include "debuglog.hpp"
 #include "scopeguard.hpp"
@@ -69,9 +70,9 @@ namespace vt {
         return false;
 
       if(cfg_.actions_.scaleVideo_) {
-		encodeCodec_ = avcodec_find_encoder(codecIdOut_);
-	  if (!encodeCodec_)
-	  	return false;
+    encodeCodec_ = avcodec_find_encoder(codecIdOut_);
+    if (!encodeCodec_)
+      return false;
 
      }
 
@@ -114,12 +115,12 @@ namespace vt {
 
       if(no_scale_ctx) {
         sws_freeContext(no_scale_ctx);
-		no_scale_ctx = 0;
+        no_scale_ctx = 0;
       }
 
      if(scale_ctx) {
         sws_freeContext(scale_ctx);
-		scale_ctx = 0;
+        scale_ctx = 0;
       }
 
     }
@@ -128,54 +129,58 @@ namespace vt {
       if(cfg_.actions_.scaleVideo_){ 
         ScopeGuard guard( [&](){ free(); } );
         float wScaleFactor = static_cast<float>(cfg_.widthOut) / w;
-        float hScaleFactor = static_cast<float>(cfg_.heightOut) / h;	
-		float scaleFactor = w * hScaleFactor <= cfg_.widthOut ? hScaleFactor: wScaleFactor;
-//        scaleFactor = 1.0;
+        float hScaleFactor = static_cast<float>(cfg_.heightOut) / h;  
+        float scaleFactor = w * hScaleFactor <= cfg_.widthOut ? hScaleFactor: wScaleFactor;
         cfg_.widthOut = w * scaleFactor;
         cfg_.heightOut = h * scaleFactor;
         if(cfg_.widthOut % 2 == 1)
-          cfg_.widthOut--; // ensure width is evem, this is important for h264	
+          cfg_.widthOut--; // ensure width is evem, this is important for h264  
 
-		scale_ctx = sws_getContext(
-		  w,
-		  h,
-		  inFormat_,
-		  cfg_.widthOut,
-		  cfg_.heightOut,
-		  outFormat_,
-		  SWS_BILINEAR,
-		  NULL, NULL, NULL
-		);
+        std::stringstream mediatype_str;    
+        mediatype_str << "video/x-h264,width="<< cfg_.widthOut << 
+          ",height=" << cfg_.heightOut << ",stream-format=(string)byte-stream";
+        mediatype = mediatype_str.str();
+        scale_ctx = sws_getContext(
+          w,
+          h,
+          inFormat_,
+          cfg_.widthOut,
+          cfg_.heightOut,
+          outFormat_,
+          SWS_BILINEAR,
+          NULL, NULL, NULL
+        );
       
 
-		if (!scale_ctx) {
+        if (!scale_ctx) {
           std::cerr << "initScaleCtx scale_ctx init fault" << std::endl;
-		  return VT_CANNOT_CREATE_SCALE_CTX;
+          return VT_CANNOT_CREATE_SCALE_CTX;
         }
  
-		encodeContext_ = avcodec_alloc_context3(encodeCodec_);
-		if (!encodeContext_) {
+        encodeContext_ = avcodec_alloc_context3(encodeCodec_);
+        if (!encodeContext_) {
           std::cerr << "initScaleCtx encode_ctx init fault" << std::endl;
           return VT_CANNOT_OPEN_ENCODER;
         }
- 
-		encodeContext_->thread_count=1;
-		encodeContext_->max_b_frames=0;
-		encodeContext_->width = cfg_.widthOut;
-		encodeContext_->height = cfg_.heightOut;
-		encodeContext_->time_base = AVRational { 1, static_cast<int>(cfg_.frameRateOut) };
-		encodeContext_->framerate = AVRational { static_cast<int>(cfg_.frameRateOut), 1 };
-		encodeContext_->gop_size = cfg_.gopSize;
-		encodeContext_->pix_fmt = outFormat_;
-		encodeContext_->bit_rate = cfg_.bitRateOut; // +
-		encodeContext_->profile = FF_PROFILE_H264_BASELINE;
+     
+        encodeContext_->thread_count=1;
+        encodeContext_->max_b_frames=0;
+        encodeContext_->width = cfg_.widthOut;
+        encodeContext_->height = cfg_.heightOut;
+        encodeContext_->time_base = AVRational { 1, static_cast<int>(cfg_.frameRateOut) };
+        encodeContext_->framerate = AVRational { static_cast<int>(cfg_.frameRateOut), 1 };
+        encodeContext_->gop_size = cfg_.gopSize;
+        encodeContext_->pix_fmt = outFormat_;
+        encodeContext_->bit_rate = cfg_.bitRateOut; // +
+        encodeContext_->profile = FF_PROFILE_H264_BASELINE;
 
-		if (encodeCodec_->id == AV_CODEC_ID_H264) {
-		  av_opt_set(encodeContext_->priv_data, "preset", cfg_.preset.c_str(), 0);
-		  av_opt_set(encodeContext_->priv_data, "tune", cfg_.tune.c_str(), 0);
-		}
+        if (encodeCodec_->id == AV_CODEC_ID_H264) {
+          av_opt_set(encodeContext_->priv_data, "preset", cfg_.preset.c_str(), 0);
+          av_opt_set(encodeContext_->priv_data, "tune", cfg_.tune.c_str(), 0);
+        }
         auto encodeRet =  avcodec_open2(encodeContext_, encodeCodec_, nullptr); 
-		if(encodeRet < 0) {
+    
+        if(encodeRet < 0) {
           char buffer[1024];
           memset(buffer, 0, 1024);
 
@@ -184,30 +189,30 @@ namespace vt {
           return VT_CANNOT_OPEN_ENCODER;
         }
  
-		scaledFrame_ = av_frame_alloc();
-		if (!scaledFrame_) {
+        scaledFrame_ = av_frame_alloc();
+        if (!scaledFrame_) {
           std::cerr << "initScaleCtx scaledFrame alloc fault" << std::endl;
-		  return VT_CANNOT_ALLOC_IMAGE;
+          return VT_CANNOT_ALLOC_IMAGE;
         }
  
-		scaledFrame_->format = outFormat_;
-		scaledFrame_->width = cfg_.widthOut;
-		scaledFrame_->height = cfg_.heightOut;
+        scaledFrame_->format = outFormat_;
+        scaledFrame_->width = cfg_.widthOut;
+        scaledFrame_->height = cfg_.heightOut;
 
-		if (av_frame_get_buffer(scaledFrame_, 1) < 0) {
+        if (av_frame_get_buffer(scaledFrame_, 1) < 0) {
           std::cerr << "initScaleCtx scaledFrame allocation error" << std::endl;
           return VT_CANNOT_ALLOC_IMAGE;
         }
  
-		if (av_image_alloc(
-	      scaledFrame_->data, 
-	      scaledFrame_->linesize, 
-	      cfg_.widthOut, 
-	      cfg_.heightOut, 
-	      outFormat_, 
-	      1) < 0) {
-	         std::cerr << "initScaleCtx allocate image fault" << std::endl;
-                 return VT_CANNOT_ALLOC_IMAGE;
+        if (av_image_alloc(
+          scaledFrame_->data, 
+          scaledFrame_->linesize, 
+          cfg_.widthOut, 
+          cfg_.heightOut, 
+          outFormat_, 
+           1) < 0) {
+            std::cerr << "initScaleCtx allocate image fault" << std::endl;
+            return VT_CANNOT_ALLOC_IMAGE;
         }
         guard.disable_ = true;
       }
@@ -253,6 +258,7 @@ namespace vt {
     AVFrame* scaledFrame_ = nullptr;
     SwsContext *scale_ctx = nullptr;
     SwsContext *no_scale_ctx = nullptr;
+    std::string mediatype;
   };
 
   VtErrorCode VideoTransformServiceImpl::init(
@@ -278,8 +284,10 @@ namespace vt {
       auto isRes = ctx_->initScaleCtx(ctx_->receivedFrame_->width, ctx_->receivedFrame_->height);
       if(isRes != VT_OK) {
         std::cerr << "initScale is not OK!!!" << std::endl;
-		return isRes;
+      return isRes;
       }
+      if( !handler_->handleScaledVideoMediatype(ctx_->mediatype.c_str()) )
+        return VT_CANCELED_BY_USER;
     }
     if(!ctx_->scaledFrame_) {
       std::cerr << "wtf! scaledFrame is null!" << std::endl;
@@ -314,12 +322,12 @@ namespace vt {
 
       ret = avcodec_receive_packet(ctx_->encodeContext_, &avpktOut);
       if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-       	break;
+         break;
       if( ret < 0)
-	    return VT_CANNOT_ENCODE_FRAME;
+      return VT_CANNOT_ENCODE_FRAME;
 
       if(!handler_->handleScaledVideo(avpktOut.data, avpktOut.size))
-      	return VT_CANCELED_BY_USER;
+        return VT_CANCELED_BY_USER;
     }
     return VT_OK;
   }
@@ -329,7 +337,7 @@ namespace vt {
       auto isRes = ctx_->initNoScaleCtx(ctx_->receivedFrame_->width, ctx_->receivedFrame_->height);
 
       if(isRes != VT_OK)
-	return isRes;
+  return isRes;
     }
 
     uint8_t *dst_data[4];
@@ -355,12 +363,12 @@ namespace vt {
       dst_linesize 
      );
 
-     if(! handler_->handleExtractedPicture(
-	dst_data[0],  
-	dst_bufsize ,
-	ctx_->receivedFrame_->width, 
-	ctx_->receivedFrame_->height
-	))
+    if(! handler_->handleExtractedPicture(
+      dst_data[0],  
+      dst_bufsize ,
+      ctx_->receivedFrame_->width, 
+      ctx_->receivedFrame_->height
+    ))
        return VT_CANCELED_BY_USER;
      
      return VT_OK; 
@@ -428,20 +436,20 @@ namespace vt {
 
         if( ret < 0 )
           return VT_CANNOT_DECODE_FRAME;
-	
-	ctx_->receivedFrame_->pts += 1;
+  
+  ctx_->receivedFrame_->pts += 1;
         
-	if(cfg_.actions_.extractPicture_) {
+  if(cfg_.actions_.extractPicture_) {
           auto extractRes = extractPicture();
-	  if(extractRes != VT_OK)
-	    return extractRes;
+    if(extractRes != VT_OK)
+      return extractRes;
         }
 
         if(cfg_.actions_.scaleVideo_) {
           auto scaleRes = scaleVideo();
-	  if(scaleRes != VT_OK)
-	    return scaleRes;
-	}
+    if(scaleRes != VT_OK)
+      return scaleRes;
+  }
 
       } // while decode
     
