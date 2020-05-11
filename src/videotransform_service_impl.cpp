@@ -69,9 +69,9 @@ namespace vt {
         return false;
 
       if(cfg_.actions_.scaleVideo_) {
-	encodeCodec_ = avcodec_find_encoder(codecIdOut_);
-	if (!encodeCodec_)
-	  return false;
+		encodeCodec_ = avcodec_find_encoder(codecIdOut_);
+	  if (!encodeCodec_)
+	  	return false;
 
      }
 
@@ -115,12 +115,12 @@ namespace vt {
 
       if(no_scale_ctx) {
         sws_freeContext(no_scale_ctx);
-	no_scale_ctx = 0;
+		no_scale_ctx = 0;
       }
 
      if(scale_ctx) {
         sws_freeContext(scale_ctx);
-	scale_ctx = 0;
+		scale_ctx = 0;
       }
 
     }
@@ -131,7 +131,7 @@ namespace vt {
         ScopeGuard guard( [&](){ free(); } );
         float wScaleFactor = static_cast<float>(cfg_.widthOut) / w;
         float hScaleFactor = static_cast<float>(cfg_.heightOut) / h;	
-	float scaleFactor = w * hScaleFactor <= cfg_.widthOut ? hScaleFactor: wScaleFactor;
+		float scaleFactor = w * hScaleFactor <= cfg_.widthOut ? hScaleFactor: wScaleFactor;
 //        scaleFactor = 1.0;
         cfg_.widthOut = w * scaleFactor;
         cfg_.heightOut = h * scaleFactor;
@@ -144,48 +144,47 @@ namespace vt {
           cfg_.heightOut << std::endl
         ; 
  
-	scale_ctx = sws_getContext(
-	  w,
-	  h,
-	  inFormat_,
-	  cfg_.widthOut,
-	  cfg_.heightOut,
-	  outFormat_,
-	  SWS_BILINEAR,
-	  NULL, NULL, NULL
-	);
+		scale_ctx = sws_getContext(
+		  w,
+		  h,
+		  inFormat_,
+		  cfg_.widthOut,
+		  cfg_.heightOut,
+		  outFormat_,
+		  SWS_BILINEAR,
+		  NULL, NULL, NULL
+		);
       
 
-	if (!scale_ctx) {
+		if (!scale_ctx) {
           stdcerr << "initScaleCtx scale_ctx init fault" << std::endl;
- 
-	  return VT_CANNOT_CREATE_SCALE_CTX;
+		  return VT_CANNOT_CREATE_SCALE_CTX;
         }
         stdcerr << "initScaleCtx scale_ctx inited" << std::endl;
  
-	encodeContext_ = avcodec_alloc_context3(encodeCodec_);
-	if (!encodeContext_) {
+		encodeContext_ = avcodec_alloc_context3(encodeCodec_);
+		if (!encodeContext_) {
           stdcerr << "initScaleCtx encode_ctx init fault" << std::endl;
           return VT_CANNOT_OPEN_ENCODER;
         }
         stdcerr << "initScaleCtx encode_ctx inited" << std::endl;
  
-	encodeContext_->thread_count=1;
-	encodeContext_->width = cfg_.widthOut;
-	encodeContext_->height = cfg_.heightOut;
-	encodeContext_->time_base = AVRational { 1, 25 };
-	encodeContext_->framerate = AVRational { static_cast<int>(cfg_.frameRateOut), 1 };
-	encodeContext_->gop_size = cfg_.gopSize;
-	encodeContext_->pix_fmt = outFormat_;
-	encodeContext_->bit_rate = cfg_.bitRateOut; // +
-	encodeContext_->profile = FF_PROFILE_H264_MAIN;
+		encodeContext_->thread_count=1;
+		encodeContext_->width = cfg_.widthOut;
+		encodeContext_->height = cfg_.heightOut;
+		encodeContext_->time_base = AVRational { 1, static_cast<int>(cfg_.frameRateOut) };
+		encodeContext_->framerate = AVRational { static_cast<int>(cfg_.frameRateOut), 1 };
+		encodeContext_->gop_size = cfg_.gopSize;
+		encodeContext_->pix_fmt = outFormat_;
+		encodeContext_->bit_rate = cfg_.bitRateOut; // +
+		encodeContext_->profile = FF_PROFILE_H264_BASELINE;
 
-	if (encodeCodec_->id == AV_CODEC_ID_H264) {
-	  av_opt_set(encodeContext_->priv_data, "preset", cfg_.preset.c_str(), 0);
-	  av_opt_set(encodeContext_->priv_data, "tune", cfg_.tune.c_str(), 0);
-	}
+		if (encodeCodec_->id == AV_CODEC_ID_H264) {
+		  av_opt_set(encodeContext_->priv_data, "preset", cfg_.preset.c_str(), 0);
+		  av_opt_set(encodeContext_->priv_data, "tune", cfg_.tune.c_str(), 0);
+		}
         auto encodeRet =  avcodec_open2(encodeContext_, encodeCodec_, nullptr); 
-	if(encodeRet < 0) {
+		if(encodeRet < 0) {
           char buffer[1024];
           memset(buffer, 0, 1024);
 
@@ -195,24 +194,24 @@ namespace vt {
         }
         stdcerr << "initScaleCtx encodeCodec inited" << std::endl;
  
-	scaledFrame_ = av_frame_alloc();
-	if (!scaledFrame_) {
+		scaledFrame_ = av_frame_alloc();
+		if (!scaledFrame_) {
           stdcerr << "initScaleCtx scaledFrame alloc fault" << std::endl;
-	  return VT_CANNOT_ALLOC_IMAGE;
+		  return VT_CANNOT_ALLOC_IMAGE;
         }
         stdcerr << "initScaleCtx scaledFrame allocated" << std::endl;
  
-	scaledFrame_->format = outFormat_;
-	scaledFrame_->width = cfg_.widthOut;
-	scaledFrame_->height = cfg_.heightOut;
+		scaledFrame_->format = outFormat_;
+		scaledFrame_->width = cfg_.widthOut;
+		scaledFrame_->height = cfg_.heightOut;
 
-	if (av_frame_get_buffer(scaledFrame_, 1) < 0) {
+		if (av_frame_get_buffer(scaledFrame_, 1) < 0) {
           stdcerr << "initScaleCtx scaledFrame allocated" << std::endl;
           return VT_CANNOT_ALLOC_IMAGE;
         }
         stdcerr << "initScaleCtx scaledFrame allocated" << std::endl;
  
-	if (av_image_alloc(
+		if (av_image_alloc(
 	      scaledFrame_->data, 
 	      scaledFrame_->linesize, 
 	      cfg_.widthOut, 
