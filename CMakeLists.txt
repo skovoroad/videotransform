@@ -4,5 +4,7 @@ project(videotransform)
 set(CMAKE_CXX_STANDARD 17)
 
 add_subdirectory(src)
-add_subdirectory(example)
+if (${CMAKE_BUILD_TYPE} MATCHES "Debug")
+  add_subdirectory(example)
+endif()
 
