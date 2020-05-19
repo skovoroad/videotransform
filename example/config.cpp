@@ -54,6 +54,7 @@ bool dumpConfig(const vt::VideoTransformConfig& cfg, Config& config) {
   return true;
   std::cout  
     << "file in: " << config.fileIn << std::endl
+    << "file out: " << config.fileOut << std::endl
     << "dir out: " << config.dirOut << std::endl
     << "extract picture: " << cfg.actions_.extractPicture_ << std::endl
     << "scale video: " << cfg.actions_.scaleVideo_ << std::endl
@@ -100,7 +101,8 @@ bool parseConfig(
     po::options_description fileOptions{"File"};
     fileOptions.add_options()
       ("file-in", po::value<std::string>(&config.fileIn), "input file")
-      ("dir-out", po::value<std::string>(&config.dirOut), "output directory (must exist)")
+      ("file-out", po::value<std::string>(&config.fileOut), "avi output file")
+      ("dir-out", po::value<std::string>(&config.dirOut), "pictures output directory (must exist)")
       ("extract-picture", po::value<bool>(&vConfig.actions_.extractPicture_)->default_value(true), "extract picture, default true")
       ("scale-video", po::value<bool>(&vConfig.actions_.scaleVideo_)->default_value(true), "scale video, default true")
       ("width", po::value<size_t>(&vConfig.widthOut)->default_value(320), "output video width, default 320")

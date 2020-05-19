@@ -9,10 +9,10 @@ class ExampleVideoTransformHandler : public vt::VideoHandler{
     size_t bmpCounter_ = 0;
     std::ofstream ofstr;
    public:
-    ExampleVideoTransformHandler(const char *dir) {
+    ExampleVideoTransformHandler(const char *dir, const char *fn) {
       dir_ = dir;
       std::stringstream fname;
-      fname << dir_ << "/scaled.h264"; 
+      fname << dir_ << "/" << fn; 
       std::string h264fname = fname.str(); 
       ofstr.open(h264fname.c_str(), std::ios::out | std::ios::binary);
     }
@@ -57,7 +57,7 @@ int main(int argc, char** argv)
     return -1;
   }
 
-  auto handler = std::make_unique<ExampleVideoTransformHandler>(cfg.dirOut.c_str());
+  auto handler = std::make_unique<ExampleVideoTransformHandler>(cfg.dirOut.c_str(), cfg.fileOut.c_str());
   auto service = createVideoTransformService(vCfg, handler.get());
   if(! service) {
     std::cerr << "Cannot create videotransform service" << std::endl;

@@ -4,6 +4,7 @@
 
 struct Config {
   std::string fileIn;
+  std::string fileOut;
   std::string dirOut;
 };
 
